@@ -11,12 +11,15 @@ class BPETokenizer:
         self.name = name
         self.maxvocab = maxvocab
         self.unique_chars = [chr(i) for i in range(256)]
+
         
-        self.vocab: dict[int, bytes] = {}
+        self.vocab: dict[int, str] = {}
         self.vocab = {i: char for i, char in enumerate(self.unique_chars)}
+
         self.inversevocab = {char: i for i, char in enumerate(self.unique_chars)}
-        
+        self.allowedSpecials = []
         self.merges: dict[tuple[int, int], int] = {}
+        # maps two token ids to new token id
         self.mergeprio: dict[tuple[int,int],int] = {} 
         #does not map to new token, maps to merge order. 
         #I'm keeping this seperate because I want the ability to independetly change merge priority to prioritize scientific language
@@ -28,31 +31,37 @@ class BPETokenizer:
         
 
 
-    def train(self, text: str) -> None:
+    def train(self, text: str,special_tokens:list[str] = None) -> None:
         #general plan:
         #tokenize everything according to default character mapping
         #sliding window pass to count max pairs.
         #update vocab as needed
 
-
-
-        characters = []
+        processed_text = []
         ## text needs to be normalized here
+        #
         
         normalizedText = text.lower()
         if normalizedText[0] == " ":
             normalizedText = normalizedText[1:]
 
         for char in normalizedText:
-            characters.append(char)
+            processed_text.append(char)
 
         ## end of text normalization
-
-
-
         ## im running this on english articles so not sure what new characters would be but just in case
-    
-        for char in sorted(set(normalizedText)):
+
+
+        if special_tokens != None:
+            self.allowedSpecials = special_tokens
+            for x in special_tokens:
+                newId = len(self.unique_chars)
+                self.unique_chars.append(x)
+                ## update vocab with new chars
+                self.vocab[newId] = x
+                self.inversevocab[x] = newId
+
+        for char in sorted(set(processed_text)):
             if char not in self.unique_chars:
                 new_id = len(self.unique_chars)
                 self.unique_chars.append(char)
@@ -62,11 +71,12 @@ class BPETokenizer:
 
 
         
-
+        
 
         ## converting 
       
-        tokens = [self.inversevocab[x] for x in characters]
+        tokens = [self.inversevocab[x] for x in processed_text]
+
         
 
         ## check for max pairs -> replace -> break if no options
@@ -139,7 +149,9 @@ class BPETokenizer:
         # return full list of tokens
     
 
-    
+
+
+        # splittings process
         words = []
         lines = text.split("\n")
         for i, line in enumerate(lines):
@@ -212,8 +224,6 @@ class BPETokenizer:
         return  tokens
     
 
-
-    
     def saveModel(self) -> None:
         #simple saving and loading with pickle
         with open(f"tokenizerModels/{self.name}", "wb") as f:
@@ -224,6 +234,39 @@ class BPETokenizer:
         #simple saving and loading with pickle
         with open(f"tokenizerModels/{name}", "rb") as f:
             return pickle.load(f)
+
+    def display(self, path: str | None = None) -> None:
+        #writes vocab, merges and merge priority to a file in a readable table format
+        if path is None:
+            path = f"{self.name}_display.txt"
+
+        def show(token: int) -> str:
+            #make control chars / whitespace visible instead of writing raw
+            return repr(self.vocab[token])
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"=== Tokenizer '{self.name}' ===\n")
+            f.write(f"vocab size: {len(self.vocab)}   maxvocab: {self.maxvocab}   full: {self.isFullVocab}\n")
+            f.write("\n--- Vocab (id -> token) ---\n")
+            for token_id in sorted(self.vocab):
+                f.write(f"  {token_id:>6}  {show(token_id)}\n")
+            f.write("\n--- Merges (pair -> new id) ---\n")
+            if not self.merges:
+                f.write("  (none)\n")
+            else:
+                for pair, new_id in self.merges.items():
+                    left, right = pair
+                    f.write(f"  ({left}, {right})  {show(left)} + {show(right)}  ->  {new_id}  {show(new_id)}\n")
+
+            f.write("\n--- Merge priority (order applied, lower = earlier) ---\n")
+            if not self.mergeprio:
+                f.write("  (none)\n")
+            else:
+                for pair, prio in sorted(self.mergeprio.items(), key=lambda item: item[1]):
+                    left, right = pair
+                    f.write(f"  #{prio:<6} ({left}, {right})  {show(left)} + {show(right)}\n")
+        
+    
         
 
 
