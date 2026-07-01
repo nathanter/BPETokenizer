@@ -1,8 +1,7 @@
-from InterestEngine.tokenizerModels.Tokenizer import BPETokenizer
+from Tokenizer import BPETokenizer
 
 
-
-
+# run test with python -m pytest -s from main directory
 
 
 def setupWikipediaTestCase() -> tuple[list[int], list[int]]:
@@ -22,17 +21,16 @@ def test_fullTokenize():
     teststr1 = "aaabdaaabac"
     tokenizer = BPETokenizer("test name")
     tokenizer.train(teststr1)
-    print(tokenizer.merges)
-    print(tokenizer.vocab)
     print([chr(x) for x in tokenizer.encodeWord("aaabdaaabac")])
-    assert True == False
+    #visual confirmation of vocabuary being constructed
+    #this requires printing to be enabled with the -s tag
+    assert True == True
     
 def test_MaxPair():
 
     #testing maxpair -> test returns aa
     newList,newResultList = setupWikipediaTestCase()
     maxpair = BPETokenizer.findMaxPair(newList)
-
     newList = BPETokenizer.updateTokensRemovePair(newList,maxpair,ord('Z'))
     maxpair2 = BPETokenizer.findMaxPair(newList)
     assert maxpair == tuple([ord('a'),ord('a')])

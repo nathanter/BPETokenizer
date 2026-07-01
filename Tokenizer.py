@@ -5,7 +5,6 @@ import pickle
 
 
 class BPETokenizer:
-    
 
     def __init__(self,name : str,maxvocab = 10000):
         ## sets up list of all chars theoretically expressable by one byte. (256 ASCII)
@@ -167,7 +166,7 @@ class BPETokenizer:
     
 
     def encodeWord(self,word:str) -> list[int]:
-        print("encoding single word")
+
         # process:
         # tokenize everything
         # find all possible pairs
@@ -177,13 +176,11 @@ class BPETokenizer:
         tokens = [self.inversevocab.get(char, None) for char in word]
 
         if None in tokens:
-            print("failed")
             raise Exception("encoding failed")
         
         
         # this bit was copied from Sebastion Raschka becuase I think it's cool to generate pairs like this
         while True:
-            print("stuck")
             pairs = set(zip(tokens, tokens[1:]))
             if not pairs: break
             #if only one token left. Or if no mergable pairs
