@@ -142,35 +142,69 @@ class BPETokenizer:
         return maxpair
 
 
-    def encode(self, text: str) -> list[int]:
+
+    def encode(self, text: str, textSource :str= None, textAuthor : str= None, textTags : list[str] = None) -> list[int]:
         # process:
         # split text into words.
         # tokenize words individually
         # return full list of tokens
-    
+        final_encoded_tokens = []
+
+        # special tokens:
+        if "[Source]" in self.allowedSpecials:
+            if textSource == None:
+                raise Exception("Source token allowed but not defined")
+            else: 
+                
+                final_encoded_tokens.extend(self.encodeWord(textSource))
+                final_encoded_tokens.append(self.inversevocab["[Source]"])
+
+        if "[Author]" in self.allowedSpecials:
+            if textAuthor == None:
+                raise Exception("Author token allowed but not defined")
+            else: 
+            
+                for x in textAuthor.split(" "):
+                    #Yes i am not adding spaces. I do not see the purpose
+                    final_encoded_tokens.extend(self.encodeWord(x))
+                
+                final_encoded_tokens.append(self.inversevocab["[Author]"])
+
+        if "[Tags]" in self.allowedSpecials:
+            if textTags == None:
+                raise Exception("Tags token allowed but not defined")
+            else: 
+            
+                for x in textTags:
+                    final_encoded_tokens.extend(self.encodeWord(" " + x))
+                final_encoded_tokens.append(self.inversevocab["[Tags]"])
+                
+        
 
 
 
         # splittings process
-        words = []
+        chunks = []
         lines = text.split("\n")
         for i, line in enumerate(lines):
             if i > 0:
-                words.append("\n")
+                chunks.append("\n")
             words = line.split()
             for j, word in enumerate(words):
                 if j == 0 and i > 0:
-                    words.append(" " + word)
+                    chunks.append(" " + word)
                 elif j == 0:
-                    words.append(word)
+                    chunks.append(word)
                 else:
-                    words.append(" " + word)
+                    chunks.append(" " + word)
 
 
-        final_encoded_tokens = []
+        
         for i,x in enumerate(words):
-            final_encoded_tokens.append(self.encodeWord(x))
+            final_encoded_tokens.extend(self.encodeWord(x))
 
+        if "[EOP]" in self.allowedSpecials:
+            final_encoded_tokens.append(self.inversevocab["[EOP]"])
         return final_encoded_tokens
 
             

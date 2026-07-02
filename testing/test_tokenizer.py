@@ -1,7 +1,7 @@
 from Tokenizer import BPETokenizer
 
 
-# run test with python -m pytest -s from main directory
+# run test with python3 -m pytest -s from main directory
 
 
 def setupWikipediaTestCase() -> tuple[list[int], list[int]]:
