@@ -29,17 +29,21 @@ class BPETokenizer:
 
         self.isFullVocab = False
         
+    
+    def initSpecialTokens(self, special_tokens:list[str] = None): 
+        if special_tokens != None:
+            self.allowedSpecials = special_tokens
+            for x in special_tokens:
+                newId = len(self.unique_chars)
+                self.unique_chars.append(x)
+                ## update vocab with new chars
+                self.vocab[newId] = x
+                self.inversevocab[x] = newId
 
-
-    def train(self, text: str,special_tokens:list[str] = None) -> None:
-        #general plan:
-        #tokenize everything according to default character mapping
-        #sliding window pass to count max pairs.
-        #update vocab as needed
-
+    def convertTextBlockToTokens(self,text :str): 
         processed_text = []
         ## text needs to be normalized here
-        #
+        
         
         normalizedText = text.lower()
         if normalizedText[0] == " ":
@@ -51,16 +55,6 @@ class BPETokenizer:
         ## end of text normalization
         ## im running this on english articles so not sure what new characters would be but just in case
 
-
-        if special_tokens != None:
-            self.allowedSpecials = special_tokens
-            for x in special_tokens:
-                newId = len(self.unique_chars)
-                self.unique_chars.append(x)
-                ## update vocab with new chars
-                self.vocab[newId] = x
-                self.inversevocab[x] = newId
-
         for char in sorted(set(processed_text)):
             if char not in self.unique_chars:
                 new_id = len(self.unique_chars)
@@ -68,17 +62,16 @@ class BPETokenizer:
                 ## update vocab with new chars
                 self.vocab[new_id] = char
                 self.inversevocab[char] = new_id
-
-
-        
-        
-
         ## converting 
       
         tokens = [self.inversevocab[x] for x in processed_text]
-
-        
-
+        return tokens
+    
+    def train(self, tokens) -> None:
+        #general plan:
+        #tokenize everything according to default character mapping
+        #sliding window pass to count max pairs.
+        #update vocab as needed
         ## check for max pairs -> replace -> break if no options
         for i in range(len(self.vocab),self.maxvocab):
             resultPair = self.findMaxPair(tokens)
@@ -141,16 +134,9 @@ class BPETokenizer:
         
         return maxpair
 
-
-
-    def encode(self, text: str, textSource :str= None, textAuthor : str= None, textTags : list[str] = None) -> list[int]:
-        # process:
-        # split text into words.
-        # tokenize words individually
-        # return full list of tokens
+    
+    def specialTokensFromArticlesHandling(self, final_encoded_tokens ,textSource :str= None, textAuthor : str= None, textTags : list[str] = None):
         final_encoded_tokens = []
-
-        # special tokens:
         if "[Source]" in self.allowedSpecials:
             if textSource == None:
                 raise Exception("Source token allowed but not defined")
@@ -178,10 +164,17 @@ class BPETokenizer:
                 for x in textTags:
                     final_encoded_tokens.extend(self.encodeWord(" " + x))
                 final_encoded_tokens.append(self.inversevocab["[Tags]"])
-                
+        return final_encoded_tokens
         
+    def encode(self, text: str) -> list[int]:
+        # process:
+        # split text into words.
+        # tokenize words individually
+        # return full list of tokens
+        final_encoded_tokens = []
 
-
+        # special tokens:
+        
 
         # splittings process
         chunks = []
