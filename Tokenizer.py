@@ -134,7 +134,21 @@ class BPETokenizer:
         
         return maxpair
 
-    
+    def tokenizeMultipleFiles(self,directory:str):
+        # take multiple files of jsons. find text element and all other elements and concantage them together.
+
+
+        # run some function here that converts all json files to text result should be strings
+        strings = []
+
+
+        finalTokens = []
+        for string in strings:
+            finalTokens.extend(self.encode(strings))
+            if "[EOP]" in self.allowedSpecials:
+                finalTokens.append(self.inversevocab["[EOP]"])
+
+
     def specialTokensFromArticlesHandling(self, final_encoded_tokens ,textSource :str= None, textAuthor : str= None, textTags : list[str] = None):
         final_encoded_tokens = []
         if "[Source]" in self.allowedSpecials:
@@ -195,9 +209,10 @@ class BPETokenizer:
         
         for i,x in enumerate(words):
             final_encoded_tokens.extend(self.encodeWord(x))
-
-        if "[EOP]" in self.allowedSpecials:
-            final_encoded_tokens.append(self.inversevocab["[EOP]"])
+    
+        #
+        #if "[EOP]" in self.allowedSpecials:
+        #    final_encoded_tokens.append(self.inversevocab["[EOP]"])
         return final_encoded_tokens
 
             
