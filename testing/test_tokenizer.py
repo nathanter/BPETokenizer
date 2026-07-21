@@ -1,4 +1,4 @@
-from Tokenizer import BPETokenizer
+from src.Tokenizer import BPETokenizer
 
 
 # run test with python3 -m pytest -s from main directory
@@ -20,7 +20,7 @@ def setupWikipediaTestCase() -> tuple[list[int], list[int]]:
 def test_fullTokenize():
     teststr1 = "aaabdaaabac"
     tokenizer = BPETokenizer("test name")
-    tokenizer.train(teststr1)
+    tokenizer.train(tokenizer.convertTextBlockToTokens(teststr1))
     print([chr(x) for x in tokenizer.encodeWord("aaabdaaabac")])
     #visual confirmation of vocabuary being constructed
     #this requires printing to be enabled with the -s tag
@@ -29,10 +29,12 @@ def test_fullTokenize():
 def test_MaxPair():
 
     #testing maxpair -> test returns aa
+    #findMaxPair now takes a list of chunks; this case is a single chunk, so wrap it.
+    #the merge itself is the per-chunk primitive mergePairInChunk.
     newList,newResultList = setupWikipediaTestCase()
-    maxpair = BPETokenizer.findMaxPair(newList)
-    newList = BPETokenizer.updateTokensRemovePair(newList,maxpair,ord('Z'))
-    maxpair2 = BPETokenizer.findMaxPair(newList)
+    maxpair = BPETokenizer.findMaxPair([newList])
+    newList = BPETokenizer.mergePairInChunk(newList,maxpair,ord('Z'))
+    maxpair2 = BPETokenizer.findMaxPair([newList])
     assert maxpair == tuple([ord('a'),ord('a')])
 
     # tiebreaker between "ab" token and "Za" token is broken arbitrarily. Max used in this implementation does it by insertion order
@@ -55,5 +57,6 @@ def test_PairReplace():
 
     
     
+    #these cases test the per-chunk merge primitive directly (flat list in/out)
     for x in range(len(testCaseLists)):
-        assert BPETokenizer.updateTokensRemovePair(testCaseLists[x],testCaseTargets[x],testCasenewToken[x]) == testCaseExpectedResult[x]
+        assert BPETokenizer.mergePairInChunk(testCaseLists[x],testCaseTargets[x],testCasenewToken[x]) == testCaseExpectedResult[x]

@@ -38,33 +38,56 @@ class BPETokenizer:
                 self.unique_chars.append(x)
                 ## update vocab with new chars
                 self.vocab[newId] = x
+
+                #consider storign these seperately. if I encounter special tokens in text I might not want to replace them
                 self.inversevocab[x] = newId
 
+
+    def pretokenize(self,text :str) -> list[str]:
+        #chunking process
+        chunks = []
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if i > 0:
+                chunks.append("\n")
+            words = line.split()
+            for j, word in enumerate(words):
+                if j == 0 and i > 0:
+                    chunks.append(" " + word)
+                elif j == 0:
+                    chunks.append(word)
+                else:
+                    chunks.append(" " + word)
+
+        return chunks
     def convertTextBlockToTokens(self,text :str): 
         processed_text = []
         ## text needs to be normalized here
         
         
-        normalizedText = text.lower()
-        if normalizedText[0] == " ":
-            normalizedText = normalizedText[1:]
-
+        normalizedText = text.strip()
+        chunks = self.pretokenize(normalizedText)
         for char in normalizedText:
             processed_text.append(char)
 
         ## end of text normalization
-        ## im running this on english articles so not sure what new characters would be but just in case
-
+        ## check for unique characters
         for char in sorted(set(processed_text)):
             if char not in self.unique_chars:
-                new_id = len(self.unique_chars)
-                self.unique_chars.append(char)
+                new_id = len(self.vocab)
                 ## update vocab with new chars
                 self.vocab[new_id] = char
                 self.inversevocab[char] = new_id
+
         ## converting 
       
-        tokens = [self.inversevocab[x] for x in processed_text]
+        tokens = []
+        for word in chunks:
+            chunkInTokens = []
+            for chr in word:
+                chunkInTokens.append(self.inversevocab[chr])
+            tokens.append(chunkInTokens)
+
         return tokens
     
     def train(self, tokens) -> None:
@@ -79,11 +102,11 @@ class BPETokenizer:
                 break
             else: 
                 #update with result
-                newTokenid = len(self.unique_chars)
+                newTokenid = len(self.vocab)
                 tokens = BPETokenizer.updateTokensRemovePair(tokens,resultPair,newTokenid)
 
                 #change in tokens list
-                self.unique_chars.append(chr(newTokenid))
+
                 self.vocab[newTokenid] = self.vocab[resultPair[0]] + self.vocab[resultPair[1]]
                 self.inversevocab[self.vocab[resultPair[0]] + self.vocab[resultPair[1]]] = newTokenid
 
@@ -99,7 +122,13 @@ class BPETokenizer:
 
     
     @staticmethod
-    def updateTokensRemovePair(tokens:list[int],pair:tuple[int,int],newToken:int) -> list[int]: 
+    def updateTokensRemovePair(chunks:list[list[int]],pair:tuple[int,int],newToken:int) -> list[list[int]]:
+        #apply one merge across every chunk. pairs never span a chunk boundary,
+        #so each chunk is merged independently (mirrors findMaxPair's per-chunk counting)
+        return [BPETokenizer.mergePairInChunk(chunk,pair,newToken) for chunk in chunks]
+
+    @staticmethod
+    def mergePairInChunk(tokens:list[int],pair:tuple[int,int],newToken:int) -> list[int]:
         queue = deque(tokens)
         newTokens = []
 
@@ -108,22 +137,23 @@ class BPETokenizer:
             if queue and (next,queue[0]) == pair:
                 newTokens.append(newToken)
                 queue.popleft()
-            else: 
+            else:
                 newTokens.append(next)
 
         return newTokens
 
+    @staticmethod
+    def updateDictWithPairsFromChunk(tokens:list[int], counts : dict[tuple[int,int],int]):
+            for pairStart in range(len(tokens) - 1):
+                curpair = (tokens[pairStart], tokens[pairStart + 1])
+                counts[curpair] =  counts.get(curpair, 0) + 1
 
     @staticmethod
-    def findMaxPair(tokens: list[int]) -> tuple[int, int] | None:
+    def findMaxPair(tokens: list[list[int]]) -> tuple[int, int] | None:
         paircounts: dict[tuple[int, int], int] = {} #pairs a set of tokens appearing in subsequent order and the times they appear
-        for pairStart in range(len(tokens) - 1):
-            curpair = (tokens[pairStart], tokens[pairStart + 1])
-            paircounts[curpair] = paircounts.get(curpair, 0) + 1
 
-
-
-        
+        for chunk in tokens:
+            BPETokenizer.updateDictWithPairsFromChunk(chunk,paircounts)
 
         if not paircounts:
             return None
@@ -134,12 +164,13 @@ class BPETokenizer:
         
         return maxpair
 
+
+    
     def tokenizeMultipleFiles(self,directory:str):
-        # take multiple files of jsons. find text element and all other elements and concantage them together.
-
-
+        # take multiple files of jsons. find text element and all other elements and concantate them together
         # run some function here that converts all json files to text result should be strings
         strings = []
+
 
 
         finalTokens = []
@@ -158,14 +189,14 @@ class BPETokenizer:
                 
                 final_encoded_tokens.extend(self.encodeWord(textSource))
                 final_encoded_tokens.append(self.inversevocab["[Source]"])
-
+        
         if "[Author]" in self.allowedSpecials:
             if textAuthor == None:
                 raise Exception("Author token allowed but not defined")
             else: 
             
                 for x in textAuthor.split(" "):
-                    #Yes i am not adding spaces. I do not see the purpose
+                    final_encoded_tokens.extend(self.inversevocab(" "))
                     final_encoded_tokens.extend(self.encodeWord(x))
                 
                 final_encoded_tokens.append(self.inversevocab["[Author]"])
@@ -189,25 +220,13 @@ class BPETokenizer:
 
         # special tokens:
         
-
+        
         # splittings process
-        chunks = []
-        lines = text.split("\n")
-        for i, line in enumerate(lines):
-            if i > 0:
-                chunks.append("\n")
-            words = line.split()
-            for j, word in enumerate(words):
-                if j == 0 and i > 0:
-                    chunks.append(" " + word)
-                elif j == 0:
-                    chunks.append(word)
-                else:
-                    chunks.append(" " + word)
+        chunks = self.pretokenize(text)
 
 
         
-        for i,x in enumerate(words):
+        for i,x in enumerate(chunks):
             final_encoded_tokens.extend(self.encodeWord(x))
     
         #
@@ -225,8 +244,10 @@ class BPETokenizer:
         # tokenize everything
         # find all possible pairs
         # take smallest rank one. 
-        # Run replaces 
-        tokens = [] 
+        # Run replaces
+        # no normalization here: we preserve case (train path also stopped
+        # lowercasing), so encode and train agree and casing is not destroyed.
+        tokens = []
         tokens = [self.inversevocab.get(char, None) for char in word]
 
         if None in tokens:
@@ -264,7 +285,21 @@ class BPETokenizer:
 
             tokens = newtokens
         return  tokens
-    
+
+
+    def decode(self, tokens: list[int]) -> str:
+        # inverse of encode:
+        # each token id maps to a string in vocab (a base char, a merged piece,
+        # or a special token). concatenate them back into text.
+        # note: this is lossy vs the original input because training lowercases,
+        # so casing is not recoverable.
+        pieces = []
+        for token in tokens:
+            if token not in self.vocab:
+                raise Exception(f"decoding failed: unknown token id {token}")
+            pieces.append(self.vocab[token])
+        return "".join(pieces)
+
 
     def saveModel(self) -> None:
         #simple saving and loading with pickle
