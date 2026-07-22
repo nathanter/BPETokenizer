@@ -60,3 +60,61 @@ def test_PairReplace():
     #these cases test the per-chunk merge primitive directly (flat list in/out)
     for x in range(len(testCaseLists)):
         assert BPETokenizer.mergePairInChunk(testCaseLists[x],testCaseTargets[x],testCasenewToken[x]) == testCaseExpectedResult[x]
+
+
+def test_baseVocabIsLatin1():
+    # vocab starts as the 256 codepoints 0-255, with id == codepoint
+    tokenizer = BPETokenizer("base")
+    assert len(tokenizer.vocab) == 256
+    assert len(tokenizer.unique_chars) == 256
+    assert tokenizer.vocab[65] == "A"
+    assert tokenizer.inversevocab["A"] == 65
+    assert tokenizer.vocab[0] == chr(0)
+    assert tokenizer.vocab[255] == chr(255)
+
+
+def test_newCharacterRegisteredOnceAcrossCalls():
+    # a char outside the base range should be added exactly once and keep the
+    # same id across repeated convertTextBlockToTokens calls.
+    # regression: unique_chars was checked but not updated, so the same char got
+    # a fresh id every call -> duplicate vocab entries.
+    tokenizer = BPETokenizer("newchar")
+    tokenizer.convertTextBlockToTokens("中")
+    firstId = tokenizer.inversevocab["中"]
+    tokenizer.convertTextBlockToTokens("中")
+    secondId = tokenizer.inversevocab["中"]
+
+    assert firstId == secondId
+    # exactly one vocab entry maps back to the char
+    assert [tid for tid, ch in tokenizer.vocab.items() if ch == "中"] == [firstId]
+
+
+def test_registerNewChar():
+   # Note this does not hold true for all new characters if you do conversions after merges.
+    tokenizer = BPETokenizer("sync")
+    assert len(tokenizer.unique_chars) == 256
+    tokenizer.convertTextBlockToTokens("界")
+    newId = tokenizer.inversevocab["界"]
+
+    assert newId == 256                      # appended right after the base 0-255 range
+    assert tokenizer.vocab[newId] == "界"
+    assert "界" in tokenizer.unique_chars
+    assert len(tokenizer.unique_chars) == len(tokenizer.vocab)
+
+
+def test_newCharacterAfterTrainingDoesNotCollide():
+    # convert run after bpe must give the new char an id past the merge ids.
+    # convertTextBlockToTokens uses len(vocab) for the id, so it does not reuse
+    # ids that bpe already handed out to merge tokens.
+    tokenizer = BPETokenizer("collide")
+    tokens = tokenizer.convertTextBlockToTokens("aaaa")
+    tokenizer.bpe(tokens)                       # adds merge tokens to vocab only
+    mergeIds = set(tokenizer.merges.values())
+    assert mergeIds                             # sanity: bpe actually produced a merge
+
+    tokenizer.convertTextBlockToTokens("中")     # new char, id = len(vocab)
+    newId = tokenizer.inversevocab["中"]
+
+    # the new char must not overwrite an existing merge token
+    assert newId not in mergeIds
+    assert tokenizer.vocab[newId] == "中"

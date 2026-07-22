@@ -1,5 +1,7 @@
 import argparse
 from collections import deque
+import json
+from pathlib import Path
 import pickle
 
 
@@ -34,12 +36,12 @@ class BPETokenizer:
         if special_tokens != None:
             self.allowedSpecials = special_tokens
             for x in special_tokens:
-                newId = len(self.unique_chars)
+                newId = len(self.vocab)
                 self.unique_chars.append(x)
                 ## update vocab with new chars
                 self.vocab[newId] = x
 
-                #consider storign these seperately. if I encounter special tokens in text I might not want to replace them
+                #consider storing these seperately. if I encounter special tokens in text I might not want to replace them
                 self.inversevocab[x] = newId
 
 
@@ -60,7 +62,11 @@ class BPETokenizer:
                     chunks.append(" " + word)
 
         return chunks
+
     def convertTextBlockToTokens(self,text :str): 
+        #need to run this function before training.
+        # this function takes in a block of text, splits it up with pretokenize and then assigns each chars index their token id.
+
         processed_text = []
         ## text needs to be normalized here
         
@@ -75,6 +81,7 @@ class BPETokenizer:
         for char in sorted(set(processed_text)):
             if char not in self.unique_chars:
                 new_id = len(self.vocab)
+                self.unique_chars.append(char)
                 ## update vocab with new chars
                 self.vocab[new_id] = char
                 self.inversevocab[char] = new_id
@@ -90,7 +97,9 @@ class BPETokenizer:
 
         return tokens
     
-    def train(self, tokens) -> None:
+    def bpe(self, tokens : list[list[int]]) -> None:
+        # function does not work without convertextBlocktoTokens
+
         #general plan:
         #tokenize everything according to default character mapping
         #sliding window pass to count max pairs.
@@ -166,18 +175,27 @@ class BPETokenizer:
 
 
     
-    def tokenizeMultipleFiles(self,directory:str):
-        # take multiple files of jsons. find text element and all other elements and concantate them together
-        # run some function here that converts all json files to text result should be strings
+    def tokenizeOnMultipleFilesBeforeTraining(self ,directory:str):
+        # each file is a json array of article objects; pull the "text" field
+        # out of every article and tokenize just that.
         strings = []
+
+        # loop over every json file in the given directory, parse it,
+        # and collect each article's text
+        for filepath in sorted(Path(directory).glob("*.json")):
+            with open(filepath, "r", encoding="utf-8") as f:
+                articles = json.load(f)
+            for article in articles:
+                strings.append(article["text"])
+        
 
 
 
         finalTokens = []
         for string in strings:
-            finalTokens.extend(self.encode(strings))
-            if "[EOP]" in self.allowedSpecials:
-                finalTokens.append(self.inversevocab["[EOP]"])
+            finalTokens.extend(self.convertTextBlockToTokens(string))
+
+        return finalTokens
 
 
     def specialTokensFromArticlesHandling(self, final_encoded_tokens ,textSource :str= None, textAuthor : str= None, textTags : list[str] = None):
@@ -224,14 +242,13 @@ class BPETokenizer:
         # splittings process
         chunks = self.pretokenize(text)
 
-
-        
         for i,x in enumerate(chunks):
             final_encoded_tokens.extend(self.encodeWord(x))
     
-        #
-        #if "[EOP]" in self.allowedSpecials:
-        #    final_encoded_tokens.append(self.inversevocab["[EOP]"])
+        
+        if "[EOP]" in self.allowedSpecials:
+            final_encoded_tokens.append(self.inversevocab["[EOP]"])
+            #for my purposes this literally is never needed. but if you want to merge articles together or sum go ahead
         return final_encoded_tokens
 
             
