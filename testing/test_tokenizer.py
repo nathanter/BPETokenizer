@@ -20,7 +20,7 @@ def setupWikipediaTestCase() -> tuple[list[int], list[int]]:
 def test_fullTokenize():
     teststr1 = "aaabdaaabac"
     tokenizer = BPETokenizer("test name")
-    tokenizer.train(tokenizer.convertTextBlockToTokens(teststr1))
+    tokenizer.bpe(tokenizer.convertTextBlockToTokens(teststr1))
     print([chr(x) for x in tokenizer.encodeWord("aaabdaaabac")])
     #visual confirmation of vocabuary being constructed
     #this requires printing to be enabled with the -s tag

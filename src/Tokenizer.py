@@ -5,10 +5,15 @@ from pathlib import Path
 import pickle
 
 
+# default place saved models land. anchored to this file, not the cwd, so it
+# resolves the same no matter which directory the script was launched from.
+# src/Tokenizer.py -> src/ -> repo root
+MODEL_DIR = Path(__file__).resolve().parent.parent / "tokenizerModels"
+
 
 class BPETokenizer:
 
-    def __init__(self,name : str,maxvocab = 10000):
+    def __init__(self,name : str,maxvocab = 32000):
         ## sets up list of all chars theoretically expressable by one byte. (256 ASCII)
         self.name = name
         self.maxvocab = maxvocab
@@ -63,7 +68,7 @@ class BPETokenizer:
 
         return chunks
 
-    def convertTextBlockToTokens(self,text :str): 
+    def convertTextBlockToTokens(self,text :str) -> list[list[int]]: 
         #need to run this function before training.
         # this function takes in a block of text, splits it up with pretokenize and then assigns each chars index their token id.
 
@@ -106,7 +111,9 @@ class BPETokenizer:
         #update vocab as needed
         ## check for max pairs -> replace -> break if no options
         for i in range(len(self.vocab),self.maxvocab):
+            print(i)
             resultPair = self.findMaxPair(tokens)
+            print(resultPair)
             if resultPair == None:
                 break
             else: 
@@ -175,26 +182,15 @@ class BPETokenizer:
 
 
     
-    def tokenizeOnMultipleFilesBeforeTraining(self ,directory:str):
-        # each file is a json array of article objects; pull the "text" field
-        # out of every article and tokenize just that.
-        strings = []
-
+    def tokenizeOnMultipleFilesBeforeTraining(self , files : list[str]):
+        # ASSUMES THAT TEXT IS ALREADY PROCESSED/split into text
+        strings = files
         # loop over every json file in the given directory, parse it,
         # and collect each article's text
-        for filepath in sorted(Path(directory).glob("*.json")):
-            with open(filepath, "r", encoding="utf-8") as f:
-                articles = json.load(f)
-            for article in articles:
-                strings.append(article["text"])
-        
-
-
-
         finalTokens = []
         for string in strings:
             finalTokens.extend(self.convertTextBlockToTokens(string))
-
+        print("finished tokenizing")
         return finalTokens
 
 
@@ -318,21 +314,33 @@ class BPETokenizer:
         return "".join(pieces)
 
 
-    def saveModel(self) -> None:
+    def saveModel(self, path: str | Path | None = None) -> Path:
         #simple saving and loading with pickle
-        with open(f"tokenizerModels/{self.name}", "wb") as f:
+        #path defaults to MODEL_DIR/<name>.pkl but the caller can override it
+        path = Path(path) if path else MODEL_DIR / f"{self.name}.pkl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
             pickle.dump(self, f)
+        return path
 
     @staticmethod
-    def loadModel(name: str) -> "BPETokenizer":
+    def loadModel(name: str, path: str | Path | None = None) -> "BPETokenizer":
         #simple saving and loading with pickle
-        with open(f"tokenizerModels/{name}", "rb") as f:
-            return pickle.load(f)
+        #mirrors saveModel: name picks the file out of MODEL_DIR, path overrides it
+        path = Path(path) if path else MODEL_DIR / f"{name}.pkl"
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            print("File does not exist")
+            
 
-    def display(self, path: str | None = None) -> None:
+    def display(self, path: str | Path | None = None) -> Path:
         #writes vocab, merges and merge priority to a file in a readable table format
-        if path is None:
-            path = f"{self.name}_display.txt"
+        #same shape as saveModel: defaults to MODEL_DIR/<name>_display.txt so each
+        #model gets its own file instead of overwriting one shared dump in the cwd
+        path = Path(path) if path else MODEL_DIR / f"{self.name}_display.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         def show(token: int) -> str:
             #make control chars / whitespace visible instead of writing raw
@@ -359,6 +367,8 @@ class BPETokenizer:
                 for pair, prio in sorted(self.mergeprio.items(), key=lambda item: item[1]):
                     left, right = pair
                     f.write(f"  #{prio:<6} ({left}, {right})  {show(left)} + {show(right)}\n")
+
+        return path
         
     
         
