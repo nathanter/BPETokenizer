@@ -29,12 +29,15 @@ def test_fullTokenize():
 def test_MaxPair():
 
     #testing maxpair -> test returns aa
-    #findMaxPair now takes a list of chunks; this case is a single chunk, so wrap it.
-    #the merge itself is the per-chunk primitive mergePairInChunk.
+    #findMaxPair now takes a dict of chunks
+    
     newList,newResultList = setupWikipediaTestCase()
-    maxpair = BPETokenizer.findMaxPair([newList])
-    newList = BPETokenizer.mergePairInChunk(newList,maxpair,ord('Z'))
-    maxpair2 = BPETokenizer.findMaxPair([newList])
+    newdict = {}
+    newdict[tuple(newList)] = 1
+
+    maxpair = BPETokenizer.findMaxPair(newdict)
+    newList = BPETokenizer.mergePairInChunk(newdict,maxpair,ord('Z'))
+    maxpair2 = BPETokenizer.findMaxPair(newdict)
     assert maxpair == tuple([ord('a'),ord('a')])
 
     # tiebreaker between "ab" token and "Za" token is broken arbitrarily. Max used in this implementation does it by insertion order
@@ -49,7 +52,6 @@ def test_PairReplace():
 
     #test case 2 sourced from wikipeida
     newList, newResultList = setupWikipediaTestCase()
-
     testCaseLists.append(newList)
     testCaseTargets.append((ord('a'),ord('a')))
     testCasenewToken.append(ord('Z'))

@@ -1,5 +1,5 @@
 import argparse
-from collections import deque
+from collections import Counter, deque
 import json
 from pathlib import Path
 import pickle
@@ -106,20 +106,30 @@ class BPETokenizer:
         # function does not work without convertextBlocktoTokens
 
         #general plan:
-        #tokenize everything according to default character mapping
-        #sliding window pass to count max pairs.
-        #update vocab as needed
+        #1. tokenize everything according to default character mapping - done before this funcion
+        
+        #2. sliding window pass to count max pairs. (added july 29, 2.1. combine into a counted occurence list first )
+
+        # 2.3 update vocab as needed
         ## check for max pairs -> replace -> break if no options
+        
+
+
+        #2.1
+        workingTokenList = Counter(tuple(chunk) for chunk in tokens)
+
+        #2
         for i in range(len(self.vocab),self.maxvocab):
             print(i)
-            resultPair = self.findMaxPair(tokens)
+            resultPair = self.findMaxPair(workingTokenList)
             print(resultPair)
             if resultPair == None:
                 break
             else: 
                 #update with result
                 newTokenid = len(self.vocab)
-                tokens = BPETokenizer.updateTokensRemovePair(tokens,resultPair,newTokenid)
+                workingTokenList = BPETokenizer.updateTokensRemovePair(workingTokenList,resultPair,newTokenid)
+       
 
                 #change in tokens list
 
@@ -138,13 +148,14 @@ class BPETokenizer:
 
     
     @staticmethod
-    def updateTokensRemovePair(chunks:list[list[int]],pair:tuple[int,int],newToken:int) -> list[list[int]]:
-        #apply one merge across every chunk. pairs never span a chunk boundary,
-        #so each chunk is merged independently (mirrors findMaxPair's per-chunk counting)
-        return [BPETokenizer.mergePairInChunk(chunk,pair,newToken) for chunk in chunks]
+    def updateTokensRemovePair(chunks: dict[tuple[int,...],int],pair:tuple[int,int],newToken:int) -> dict[tuple[int],int]:
+        # apply merge pair to each chunk in chunk. Make new entry in dict with new chunk and remove old one.
+        return {tuple(BPETokenizer.mergePairInChunk(chunk,pair,newToken)) : freq for chunk,freq in chunks.items()}
+
+
 
     @staticmethod
-    def mergePairInChunk(tokens:list[int],pair:tuple[int,int],newToken:int) -> list[int]:
+    def mergePairInChunk(tokens:tuple[int,...],pair:tuple[int,int],newToken:int) -> list[int]:
         queue = deque(tokens)
         newTokens = []
 
@@ -158,18 +169,27 @@ class BPETokenizer:
 
         return newTokens
 
+    
+
+    
+
+    # method is used in max pair.
     @staticmethod
-    def updateDictWithPairsFromChunk(tokens:list[int], counts : dict[tuple[int,int],int]):
+    def updateDictWithPairsFromChunk(tokens:list[int], freq:int, counts : dict[tuple[int,int],int]):
             for pairStart in range(len(tokens) - 1):
                 curpair = (tokens[pairStart], tokens[pairStart + 1])
-                counts[curpair] =  counts.get(curpair, 0) + 1
+                counts[curpair] =  counts.get(curpair, 0) + freq
 
     @staticmethod
-    def findMaxPair(tokens: list[list[int]]) -> tuple[int, int] | None:
+    # takes the full dict containing a count of all words appearing in the being tokenized data.
+    # counts them and adds a count of the pairs according to how many times they appear
+    # returns the maximum one
+    #!!! consider adding tracking of paircounts
+    def findMaxPairInitial(tokenCounter: Counter) -> tuple[int, int] | None:
         paircounts: dict[tuple[int, int], int] = {} #pairs a set of tokens appearing in subsequent order and the times they appear
 
-        for chunk in tokens:
-            BPETokenizer.updateDictWithPairsFromChunk(chunk,paircounts)
+        for chunk,freq in tokenCounter.items():
+            BPETokenizer.updateDictWithPairsFromChunk(chunk,freq, paircounts)
 
         if not paircounts:
             return None
