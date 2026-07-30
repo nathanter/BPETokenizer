@@ -134,32 +134,41 @@ class BPETokenizer:
         allWordsbyIndex = [list(x) for x,i in items]
         allFreqsbyIndex = [i for x,i in items]
         PairToCount, PairIndexes =  self.InitCountsAndIndexes(CountOfTokenSequences)
-      
+        
         #3
-        for i in range(len(self.vocab),self.maxvocab):
+        for vocabnum in range(len(self.vocab),self.maxvocab):
             
-            resultPair = max(PairToCount.keys(),key=PairToCount.get) #need to check if this is okay
-            if PairToCount[resultPair] == 1:
-                resultPair == None
+            resultPair = max(PairToCount.keys(),key=PairToCount.get,default = None) #need to check if this is okay
+            if resultPair != None and PairToCount[resultPair] == 1:
+                resultPair = None
            
                 
             #debug statements
-            print(i)
             print(resultPair)
             if resultPair == None:
                 break
             else: 
                 #update with result
                 newTokenid = len(self.vocab)
-                indexes = PairIndexes.get(resultPair,[])
+                indexes = list(PairIndexes.get(resultPair,[]))
 
 
-                for i in indexes:
+                for i in indexes:   
                     #rebuild
                     
                     #update the counts of pairs
                     for x in self.allPairsinChunk(allWordsbyIndex[i]):
+                        # x is pair
                         PairToCount[x] -= allFreqsbyIndex[i]
+                        PairIndexes[x].discard(i)
+                        if PairToCount[x] == 0:
+                            PairToCount.pop(x,None)
+                        if len(PairIndexes.get(x,[])) == 0:
+                            PairIndexes.pop(x,0)
+                        
+
+                    
+                        
                          
                     #remove pairs from these chunkns/reform the chunks
                     allWordsbyIndex[i] = self.mergePairInChunk(allWordsbyIndex[i],resultPair,newTokenid)
@@ -180,7 +189,7 @@ class BPETokenizer:
                 self.merges[resultPair] = newTokenid
                 self.mergeprio[resultPair] = len(self.mergeprio)
  
-        if len(self.vocab) > self.maxvocab:
+        if len(self.vocab) >= self.maxvocab:
             self.isFullVocab = True
     
              
@@ -216,8 +225,8 @@ class BPETokenizer:
     def allPairsinChunk(tokens:list[int]) -> list[int]:
         pairs = [] 
         for pairStart in range(len(tokens) - 1):
-            curpair = tuple(tokens[pairStart], tokens[pairStart + 1])
-            pairs.append(curpair)
+            curpair = (tokens[pairStart], tokens[pairStart + 1])
+            pairs.append(tuple(curpair))
         return pairs
     # method is used in max pair.
     # !! rename this
@@ -226,22 +235,19 @@ class BPETokenizer:
     def updateDictWithPairsFromChunk(tokens:list[int], freq:int, positionInWordsArray:int, counts : dict[tuple[int,int],int],indexes):
             for pairStart in range(len(tokens) - 1):
                 curpair = (tokens[pairStart], tokens[pairStart + 1])
-                indexes[curpair] = counts.get(curpair,[]).append(positionInWordsArray)
-                counts[curpair] =  counts.get(curpair, 0) + freq
+                indexes.setdefault(curpair,set([])).add(positionInWordsArray)
+                counts[curpair] = counts.get(curpair, 0) + freq
 
 
     @staticmethod
     # takes the full dict containing a count of all words appearing in the being tokenized data.
     # counts them and adds a count of the pairs according to how many times they appear
     # returns the maximum one
-    def InitCountsAndIndexes(tokenCounter: Counter) -> dict[tuple[int, int],int] | None:
+    def InitCountsAndIndexes(tokenCounter: Counter) -> tuple[dict[tuple[int, int],int],dict[tuple[int,int],set[int]]] | None:
         paircounts: dict[tuple[int, int], int] ={}
         pairIndex: dict[tuple[int,int], list[int]] = {}
         for i,(chunk,freq) in enumerate(tokenCounter.items()):
             BPETokenizer.updateDictWithPairsFromChunk(chunk,freq, i, paircounts,pairIndex)
-
-        if not paircounts:
-            return None
         return paircounts,pairIndex
 
 
